@@ -2,28 +2,44 @@ import sys
 import glob
 import serial
 import pyautogui
+pyautogui.PAUSE = 0.0
 import tkinter as tk
 from tkinter import ttk
 from tkinter import messagebox
 from time import sleep
 
-def move_mouse(axis, value):
+pyautogui.PAUSE = 0
+
+def move_mouse(button, value):
     """Move o mouse de acordo com o eixo e valor recebidos."""
-    if axis == 0:
+    if button == 0:
         pyautogui.moveRel(value, 0)
-    elif axis == 1:
+    elif button == 1:
         pyautogui.moveRel(0, value)
 
-def handle_button(button):
-    if button == 3:      # BTN_A
-        pyautogui.press('a')
-    elif button == 4:    # BTN_B
-        pyautogui.press('b')
-    elif button == 5:    # BTN_1
-        pyautogui.press('1')
-    elif button == 6:    # BTN_2
-        pyautogui.press('2')
+def handle_button(button, value):
+    if (value == 1):
+        if button == 3:      # BTN_A
+            pyautogui.keyDown('a')
+        elif button == 4:    # BTN_B
+            pyautogui.keyDown('b')
+        elif button == 5:    # BTN_1
+            pyautogui.keyDown('1')
+        elif button == 6:    # BTN_2
+            pyautogui.keyDown('2')
     # button == 2 (HOME) deixamos por enquanto sem ação
+
+    elif (value == 0):
+        if button == 3:      # BTN_A
+            pyautogui.keyUp('a')
+        elif button == 4:    # BTN_B
+            pyautogui.keyUp('b')
+        elif button == 5:    # BTN_1
+            pyautogui.keyUp('1')
+        elif button == 6:    # BTN_2
+            pyautogui.keyUp('2')
+    # button == 2 (HOME) deixamos por enquanto sem ação
+    
 
 def controle(ser):
     """
@@ -40,15 +56,17 @@ def controle(ser):
         if sync_byte[0] == 0xFF:
             # Ler 3 bytes (axis + valor(2b))
             data = ser.read(size=3)
-
+            print(data)
             if len(data) < 3:
                 continue
             print(data)
             # axis, value = parse_data(data)
             button, value = parse_data(data)
             
-            # move_mouse(axis, value)
-            handle_button(button)
+            if (button == 0 or button == 1):
+                move_mouse(button, value)
+            else:
+                handle_button(button, value)
 
 def serial_ports():
     """Retorna uma lista das portas seriais disponíveis na máquina."""

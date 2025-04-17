@@ -6,6 +6,7 @@
 #include "gfx.h"
 #include "pico/stdlib.h"
 #include <stdio.h>
+#include "hardware/adc.h"
 
 // DEFININDO ENTRADAS
 
@@ -25,19 +26,12 @@ const uint START_LED = 21; // Led que indica que o controle está ligado
 const uint BUZZER = 17; // Buzzer que toca música ao se conectar com o computador
 
 // CRIANDO STRUCT 
-
 typedef struct {
     int button;
     int value;
 } btn_t;
 
-typedef struct {
-    int axis;   // 0 para eixo X, 1 para eixo Y
-    int val;    // valor do movimento (já filtrado e mapeado para -255 ... 255)
-} adc_t;
-
 // CRIANDO VARIÁVEIS
-
 double sleep_time;
 int num_ciclos;
 
@@ -46,7 +40,6 @@ QueueHandle_t xQueue;
 
 
 // INICIALIZANDO LEDS E BOTÕES
-
 void oled1_btn_led_init(void) {
     gpio_init(CONECTION_LED);
     gpio_set_dir(CONECTION_LED, GPIO_OUT);
@@ -139,75 +132,73 @@ void toca_musica_inicial() {
 
 
 // Callbacks
-
 void btn_callback(uint gpio, uint32_t events) {
     btn_t button_info; 
     if (events == 0x4) { // fall edge
-
         button_info.value = 1;
 
         if (gpio == START_BTN){
-            button_info.button = 1;
-            xQueueSendFromISR(xQueue, &button_info, 0); // Mandando para fila o endereço do struct 
+            button_info.button = 7;
         }
         if (gpio == BTN_HOME){
             button_info.button = 2;
-            xQueueSendFromISR(xQueue, &button_info, 0);
         }
         if (gpio == BTN_A){
             button_info.button = 3;
-            xQueueSendFromISR(xQueue, &button_info, 0);
         }
         if (gpio == BTN_B){
             button_info.button = 4;
-            xQueueSendFromISR(xQueue, &button_info, 0);
         }
         if (gpio == BTN_1){
             button_info.button = 5;
-            xQueueSendFromISR(xQueue, &button_info, 0);
         }
         if (gpio == BTN_2){
             button_info.button = 6;
-            xQueueSendFromISR(xQueue, &button_info, 0);
         }
+        xQueueSendFromISR(xQueue, &button_info, 0); // Mandando para fila o endereço do struct 
+    }
+    if (events == 0x8){
         button_info.value = 0;
 
-}
+        if (gpio == START_BTN){
+            button_info.button = 7;
+        }
+        if (gpio == BTN_HOME){
+            button_info.button = 2;
+        }
+        if (gpio == BTN_A){
+            button_info.button = 3;
+        }
+        if (gpio == BTN_B){
+            button_info.button = 4;
+        }
+        if (gpio == BTN_1){
+            button_info.button = 5;
+        }
+        if (gpio == BTN_2){
+            button_info.button = 6;
+        }
+        xQueueSendFromISR(xQueue, &button_info, 0); // Mandando para fila o endereço do struct 
+
+    }
 }
 
 // TASKS
 
 void uart_task(void *p) {
     btn_t recebido;
-    adc_t adc_data;
     while (1) {
-        if (xQueueReceive(xQueue, &recebido, portMAX_DELAY) || xQueueReceive(xQueue, &adc_data, pdMS_TO_TICKS(100)) == pdTRUE) {
+        if (xQueueReceive(xQueue, &recebido, 5)) {
             uint8_t button = (uint8_t)recebido.button;
             int16_t value = (int16_t)recebido.value;
+
+            uint8_t msb = (uint8_t)((value >> 8) & 0xFF);
+            uint8_t lsb = (uint8_t)(value & 0xFF);
             uint8_t eop = 0xFF;
-            // if (button == 1){ 
-            //     printf("Apertou botão START\n"); 
-            // }
-            // else if (button == 2){ 
-            //     printf("Apertou botão HOME\n"); 
-            // }
-            // else if (button == 3){ 
-            //     printf("Apertou botão A\n"); 
-            // }
-            // else if (button == 4){ 
-            //     printf("Apertou botão B\n"); 
-            // }
-            // else if (button == 5){
-            //     printf("Apertou botão 1\n"); 
-            // }
-            // else if (button == 6){
-            //     printf("Apertou botão 2\n"); 
-            // }
+
             putchar_raw(button);
-
-            putchar_raw(value);
-            putchar_raw(0);
-
+            putchar_raw(lsb);
+            putchar_raw(msb);
             putchar_raw(eop);
             // vTaskDelay(pdMS_TO_TICKS(100));
         }
@@ -216,7 +207,7 @@ void uart_task(void *p) {
 
 void x_task(void *p) {
     
-    adc_t adc_data;
+    btn_t recebido;
 
     static int samples[5] = {0, 0, 0, 0, 0};
     static int count = 0;
@@ -248,18 +239,18 @@ void x_task(void *p) {
             scaled_value = 0;
         }
 
-        adc_data.axis = 0;      // 0 para eixo X
-        adc_data.val = scaled_value;
+        recebido.button = 0;      // 0 para eixo X
+        recebido.value = scaled_value;
 
-        if (adc_data.val != 0){
-            xQueueSend(xQueue, &adc_data, 0);
+        if (recebido.value != 0){
+            xQueueSend(xQueue, &recebido, 0);
         }
-        vTaskDelay(pdMS_TO_TICKS(150));
+        vTaskDelay(pdMS_TO_TICKS(50));
     }
 }
 
 void y_task(void *p) {
-    adc_t adc_data;
+    btn_t recebido;
 
     static int samples[5] = {0, 0, 0, 0, 0};
     static int count = 0;
@@ -290,29 +281,34 @@ void y_task(void *p) {
             scaled_value = 0;
         }
 
-        adc_data.axis = 1;      // 1 para eixo Y
-        adc_data.val = scaled_value;
-        if (adc_data.val != 0){
-            xQueueSend(xQueue, &adc_data, 0);
+        recebido.button = 1;      // 1 para eixo Y
+        recebido.value = scaled_value;
+        if (recebido.value != 0){
+            xQueueSend(xQueue, &recebido, 0);
         }
-        
-        vTaskDelay(pdMS_TO_TICKS(150));
+        vTaskDelay(pdMS_TO_TICKS(50));
     }
 }
 
 int main() {
     stdio_init_all();
+    adc_init();
+    adc_gpio_init(VRY);
+    adc_gpio_init(VRX);
     oled1_btn_led_init();
 
-    gpio_set_irq_enabled_with_callback(START_BTN, GPIO_IRQ_EDGE_FALL, true,&btn_callback);
-    gpio_set_irq_enabled(BTN_HOME, GPIO_IRQ_EDGE_FALL, true);
-    gpio_set_irq_enabled(BTN_1, GPIO_IRQ_EDGE_FALL, true);
-    gpio_set_irq_enabled(BTN_2, GPIO_IRQ_EDGE_FALL, true);
-    gpio_set_irq_enabled(BTN_A, GPIO_IRQ_EDGE_FALL, true);
-    gpio_set_irq_enabled(BTN_B, GPIO_IRQ_EDGE_FALL, true);
+    gpio_set_irq_enabled_with_callback(START_BTN, GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE, true, &btn_callback);
+    gpio_set_irq_enabled(BTN_HOME, GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE, true);
+    gpio_set_irq_enabled(BTN_1, GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE, true);
+    gpio_set_irq_enabled(BTN_2, GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE, true);
+    gpio_set_irq_enabled(BTN_A, GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE, true);
+    gpio_set_irq_enabled(BTN_B, GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE, true);
 
     xQueue = xQueueCreate(32, sizeof(btn_t)); // Criando fila para mandar valores dos botões
+
     xTaskCreate(uart_task, "uart task", 4095, NULL, 1, NULL);
+    xTaskCreate(x_task, "x task", 4095, NULL, 1, NULL);
+    xTaskCreate(y_task, "y task", 4095, NULL, 1, NULL);
 
     vTaskStartScheduler();
 
