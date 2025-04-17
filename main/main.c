@@ -170,6 +170,8 @@ void btn_callback(uint gpio, uint32_t events) {
             button_info.button = 6;
             xQueueSendFromISR(xQueue, &button_info, 0);
         }
+        button_info.value = 0;
+
 }
 }
 
@@ -179,7 +181,7 @@ void uart_task(void *p) {
     btn_t recebido;
     adc_t adc_data;
     while (1) {
-        if (xQueueReceive(xQueue, &recebido, portMAX_DELAY) || xQueueReceive(xQueueADC, &adc_data, pdMS_TO_TICKS(100)) == pdTRUE) {
+        if (xQueueReceive(xQueue, &recebido, portMAX_DELAY) || xQueueReceive(xQueue, &adc_data, pdMS_TO_TICKS(100)) == pdTRUE) {
             uint8_t button = (uint8_t)recebido.button;
             int16_t value = (int16_t)recebido.value;
             uint8_t eop = 0xFF;
@@ -202,7 +204,10 @@ void uart_task(void *p) {
             //     printf("Apertou botão 2\n"); 
             // }
             putchar_raw(button);
+
             putchar_raw(value);
+            putchar_raw(0);
+
             putchar_raw(eop);
             // vTaskDelay(pdMS_TO_TICKS(100));
         }
@@ -247,7 +252,7 @@ void x_task(void *p) {
         adc_data.val = scaled_value;
 
         if (adc_data.val != 0){
-            xQueueSend(xQueueADC, &adc_data, 0);
+            xQueueSend(xQueue, &adc_data, 0);
         }
         vTaskDelay(pdMS_TO_TICKS(150));
     }
@@ -288,7 +293,7 @@ void y_task(void *p) {
         adc_data.axis = 1;      // 1 para eixo Y
         adc_data.val = scaled_value;
         if (adc_data.val != 0){
-            xQueueSend(xQueueADC, &adc_data, 0);
+            xQueueSend(xQueue, &adc_data, 0);
         }
         
         vTaskDelay(pdMS_TO_TICKS(150));
@@ -314,3 +319,10 @@ int main() {
     while (true)
         ;
 }
+
+// Fazer duas filas? 
+// Uma uart task para tudo? 
+// lugar para colocar o value do botão como 0
+// Como fazer o botão de ligar? 
+// fall e rise botão 
+// 
