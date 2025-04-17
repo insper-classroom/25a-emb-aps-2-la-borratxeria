@@ -9,6 +9,9 @@
 
 // DEFININDO ENTRADAS
 
+const int VRX = 26;
+const int VRY = 27; 
+
 const uint START_BTN = 15; // Botão para ligar o controle 
 const uint BTN_HOME = 10; // Equivalente ao botão Home do Wii 
 const uint BTN_A = 12; // Equivalente ao botão A do Wii -> Selecionar mapas, funções / Pausar o jogo 
@@ -27,6 +30,11 @@ typedef struct {
     int button;
     int value;
 } btn_t;
+
+typedef struct {
+    int axis;   // 0 para eixo X, 1 para eixo Y
+    int val;    // valor do movimento (já filtrado e mapeado para -255 ... 255)
+} adc_t;
 
 // CRIANDO VARIÁVEIS
 
@@ -169,34 +177,121 @@ void btn_callback(uint gpio, uint32_t events) {
 
 void uart_task(void *p) {
     btn_t recebido;
+    adc_t adc_data;
     while (1) {
-        if (xQueueReceive(xQueue, &recebido, portMAX_DELAY)) {
+        if (xQueueReceive(xQueue, &recebido, portMAX_DELAY) || xQueueReceive(xQueueADC, &adc_data, pdMS_TO_TICKS(100)) == pdTRUE) {
             uint8_t button = (uint8_t)recebido.button;
             int16_t value = (int16_t)recebido.value;
             uint8_t eop = 0xFF;
-            if (button == 1){ 
-                printf("Apertou botão START\n"); 
-            }
-            else if (button == 2){ 
-                printf("Apertou botão HOME\n"); 
-            }
-            else if (button == 3){ 
-                printf("Apertou botão A\n"); 
-            }
-            else if (button == 4){ 
-                printf("Apertou botão B\n"); 
-            }
-            else if (button == 5){
-                printf("Apertou botão 1\n"); 
-            }
-            else if (button == 6){
-                printf("Apertou botão 2\n"); 
-            }
+            // if (button == 1){ 
+            //     printf("Apertou botão START\n"); 
+            // }
+            // else if (button == 2){ 
+            //     printf("Apertou botão HOME\n"); 
+            // }
+            // else if (button == 3){ 
+            //     printf("Apertou botão A\n"); 
+            // }
+            // else if (button == 4){ 
+            //     printf("Apertou botão B\n"); 
+            // }
+            // else if (button == 5){
+            //     printf("Apertou botão 1\n"); 
+            // }
+            // else if (button == 6){
+            //     printf("Apertou botão 2\n"); 
+            // }
             putchar_raw(button);
             putchar_raw(value);
             putchar_raw(eop);
             // vTaskDelay(pdMS_TO_TICKS(100));
         }
+    }
+}
+
+void x_task(void *p) {
+    
+    adc_t adc_data;
+
+    static int samples[5] = {0, 0, 0, 0, 0};
+    static int count = 0;
+
+    while (1) {
+        adc_select_input(0);
+        int valor_adc = adc_read();
+
+        // media movel
+        if (count < 4) {
+            count ++;
+        } else{
+            count = 0;
+        }
+        samples[count] = valor_adc;
+        int mean = (samples[0] + samples[1] + samples[2] + samples[3] + samples[4]) / 5;
+        // printf("Media X: %d\n", mean);
+
+        // mudando para escala -255 +255
+        // Centralizar em torno de zero
+        int centro = 2048;
+        int delta = mean - centro; // Agora varia de -2048 a +2047
+
+        int scaled_value = (delta * 255) / 2048; 
+        // scaled_value agora vai aproximadamente de -255 a +255
+
+        // Vendo se esta na zona morta -30 a +30
+        if (scaled_value >= -30 && scaled_value <= 30) {
+            scaled_value = 0;
+        }
+
+        adc_data.axis = 0;      // 0 para eixo X
+        adc_data.val = scaled_value;
+
+        if (adc_data.val != 0){
+            xQueueSend(xQueueADC, &adc_data, 0);
+        }
+        vTaskDelay(pdMS_TO_TICKS(150));
+    }
+}
+
+void y_task(void *p) {
+    adc_t adc_data;
+
+    static int samples[5] = {0, 0, 0, 0, 0};
+    static int count = 0;
+
+    while (1) {
+        adc_select_input(1);
+        int valor_adc = adc_read();
+
+        if (count < 4) {
+            count ++;
+        } else{
+            count = 0;
+        }
+        samples[count] = valor_adc;
+        int mean = (samples[0] + samples[1] + samples[2] + samples[3] + samples[4]) / 5;
+        // printf("Media Y: %d\n", mean);
+
+        // mudando para escala -255 +255
+        // Centralizar em torno de zero
+        int centro = 2048;
+        int delta = mean - centro; // Agora varia de -2048 a +2047
+
+        int scaled_value = (delta * 255) / 2048; 
+        // scaled_value agora vai aproximadamente de -255 a +255
+
+        // Vendo se esta na zona morta -30 a +30
+        if (scaled_value >= -30 && scaled_value <= 30) {
+            scaled_value = 0;
+        }
+
+        adc_data.axis = 1;      // 1 para eixo Y
+        adc_data.val = scaled_value;
+        if (adc_data.val != 0){
+            xQueueSend(xQueueADC, &adc_data, 0);
+        }
+        
+        vTaskDelay(pdMS_TO_TICKS(150));
     }
 }
 
