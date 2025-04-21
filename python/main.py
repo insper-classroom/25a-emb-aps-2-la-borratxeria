@@ -2,7 +2,6 @@ import sys
 import glob
 import serial
 import pyautogui
-pyautogui.PAUSE = 0.0
 import tkinter as tk
 from tkinter import ttk
 from tkinter import messagebox
@@ -20,24 +19,24 @@ def move_mouse(button, value):
 def handle_button(button, value):
     if (value == 1):
         if button == 3:      # BTN_A
-            pyautogui.keyDown('a')
+            pyautogui.keyDown('A')
         elif button == 4:    # BTN_B
-            pyautogui.keyDown('b')
+            pyautogui.keyDown('B')
         elif button == 5:    # BTN_1
-            pyautogui.keyDown('1')
+            pyautogui.keyDown('Z')
         elif button == 6:    # BTN_2
-            pyautogui.keyDown('2')
+            pyautogui.keyDown('X')
     # button == 2 (HOME) deixamos por enquanto sem ação
 
     elif (value == 0):
         if button == 3:      # BTN_A
-            pyautogui.keyUp('a')
+            pyautogui.keyUp('A')
         elif button == 4:    # BTN_B
-            pyautogui.keyUp('b')
+            pyautogui.keyUp('B')
         elif button == 5:    # BTN_1
-            pyautogui.keyUp('1')
+            pyautogui.keyUp('Z')
         elif button == 6:    # BTN_2
-            pyautogui.keyUp('2')
+            pyautogui.keyUp('X')
     # button == 2 (HOME) deixamos por enquanto sem ação
     
 
@@ -217,9 +216,6 @@ def criar_janela():
         circle_canvas.itemconfig(circle_item, fill=cor)
 
     root.mainloop()
-
-
-
 
 
 if __name__ == "__main__":
