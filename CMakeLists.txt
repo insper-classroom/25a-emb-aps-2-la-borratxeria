@@ -29,5 +29,6 @@ pico_sdk_init()
 
 add_subdirectory(oled1_lib)
 add_subdirectory(freertos)
+add_subdirectory(Fusion)
 add_subdirectory(main)
 
