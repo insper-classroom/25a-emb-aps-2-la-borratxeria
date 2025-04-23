@@ -6,14 +6,21 @@
 #include "ssd1306.h"
 #include "gfx.h"
 #include "pico/stdlib.h"
-#include "pico/stdio.h"      // para putchar_raw()
+#include "pico/stdio.h"
 #include <stdio.h>
 
 #include "hardware/adc.h"
 #include "hardware/i2c.h"
 #include "mpu6050.h"
+#include "Fusion.h"
 
-// DEFININDO ENTRADAS
+#define MPU_ADDRESS      0x68
+#define I2C_SDA_GPIO     4
+#define I2C_SCL_GPIO     5
+
+#define CODE_TILT_LEFT   8
+#define CODE_TILT_RIGHT  9
+
 const int VRX = 26;
 const int VRY = 27;
 
@@ -28,37 +35,18 @@ const uint CONECTION_LED = 28;
 const uint START_LED     = 21;
 const uint BUZZER        = 17;
 
-// Endereço I2C do MPU-6050
-#define MPU_ADDRESS 0x68
-#define I2C_SDA_GPIO 4
-#define I2C_SCL_GPIO 5
-
-// Protocolo de eventos
-// 0,1 = eixos X/Y ADC; 2-7 = botões; 8=tilt esquerda; 9=tilt direita
 typedef struct {
     int button;
     int value;
 } btn_t;
 
-// Fila unificada de eventos
 static QueueHandle_t xQueue;
 
-// Tilt thresholds (em g)
-#define TILT_THRESHOLD_G       0.5f
-#define TILT_RESET_THRESHOLD_G 0.2f
-
-// Códigos de protocolo
-#define CODE_TILT_LEFT   8
-#define CODE_TILT_RIGHT  9
-
-// --- setup de LEDs e botões ---
 void oled1_btn_led_init(void) {
-    // LEDs
     gpio_init(CONECTION_LED); gpio_set_dir(CONECTION_LED, GPIO_OUT);
     gpio_init(START_LED);     gpio_set_dir(START_LED, GPIO_OUT);
     gpio_init(BUZZER);        gpio_set_dir(BUZZER, GPIO_OUT);
 
-    // Botões com pull-up (array + for clássico)
     const uint pins[] = { START_BTN, BTN_HOME, BTN_A, BTN_B, BTN_1, BTN_2 };
     for (size_t i = 0; i < sizeof(pins)/sizeof(pins[0]); i++) {
         gpio_init(pins[i]);
@@ -67,35 +55,32 @@ void oled1_btn_led_init(void) {
     }
 }
 
-// Função para despertar o MPU-6050
 static void mpu6050_reset(void) {
     uint8_t buf[] = { 0x6B, 0x00 };
     i2c_write_blocking(i2c_default, MPU_ADDRESS, buf, 2, false);
 }
 
-// Leitura bruta de acelerômetro, giroscópio e temperatura
 static void mpu6050_read_raw(int16_t accel[3], int16_t gyro[3], int16_t *temp) {
     uint8_t buffer[6], reg;
-    // Aceleração
+
     reg = 0x3B;
     i2c_write_blocking(i2c_default, MPU_ADDRESS, &reg, 1, true);
     i2c_read_blocking(i2c_default, MPU_ADDRESS, buffer, 6, false);
     for (int i = 0; i < 3; i++)
         accel[i] = (buffer[2*i] << 8) | buffer[2*i + 1];
-    // Giroscópio
+
     reg = 0x43;
     i2c_write_blocking(i2c_default, MPU_ADDRESS, &reg, 1, true);
     i2c_read_blocking(i2c_default, MPU_ADDRESS, buffer, 6, false);
     for (int i = 0; i < 3; i++)
         gyro[i] = (buffer[2*i] << 8) | buffer[2*i + 1];
-    // Temperatura
+
     reg = 0x41;
     i2c_write_blocking(i2c_default, MPU_ADDRESS, &reg, 1, true);
     i2c_read_blocking(i2c_default, MPU_ADDRESS, buffer, 2, false);
     *temp = (buffer[0] << 8) | buffer[1];
 }
 
-// ISR de botões
 void btn_callback(uint gpio, uint32_t events) {
     btn_t evt;
     evt.value = (events == GPIO_IRQ_EDGE_FALL) ? 1 : 0;
@@ -108,7 +93,6 @@ void btn_callback(uint gpio, uint32_t events) {
     xQueueSendFromISR(xQueue, &evt, NULL);
 }
 
-// Tarefa ADC eixo X
 void x_task(void *p) {
     btn_t evt;
     int samples[5] = {0}, idx = 0;
@@ -131,7 +115,6 @@ void x_task(void *p) {
     }
 }
 
-// Tarefa ADC eixo Y
 void y_task(void *p) {
     btn_t evt;
     int samples[5] = {0}, idx = 0;
@@ -147,14 +130,13 @@ void y_task(void *p) {
         if (scaled > -30 && scaled < 30) scaled = 0;
         if (scaled != 0) {
             evt.button = 1;
-            evt.value  = -scaled;  // invertido se quiser
+            evt.value  = -scaled;
             xQueueSend(xQueue, &evt, 0);
         }
         vTaskDelay(pdMS_TO_TICKS(50));
     }
 }
 
-// Tarefa UART: envia todos os eventos
 void uart_task(void *p) {
     btn_t evt;
     while (1) {
@@ -171,12 +153,10 @@ void uart_task(void *p) {
     }
 }
 
-// Tarefa de giro (MPU-6050)
 void mpu6050_task(void *p) {
     int16_t accel[3], gyro[3], temp;
-    bool left_sent = false, right_sent = false;
+    bool left_active = false, right_active = false;
 
-    // inicializa I2C do MPU
     i2c_init(i2c_default, 400000);
     gpio_set_function(I2C_SDA_GPIO, GPIO_FUNC_I2C);
     gpio_set_function(I2C_SCL_GPIO, GPIO_FUNC_I2C);
@@ -186,26 +166,57 @@ void mpu6050_task(void *p) {
     mpu6050_reset();
     vTaskDelay(pdMS_TO_TICKS(100));
 
+    FusionAhrs ahrs;
+    FusionAhrsInitialise(&ahrs);
+
+    const float samplePeriod = 0.01f;
+    FusionVector gyroscope, accelerometer;
+
     while (1) {
         mpu6050_read_raw(accel, gyro, &temp);
-        float ax = accel[1] / 16384.0f;  // eixo X
+
+        gyroscope.axis.x = gyro[0] / 131.0f;
+        gyroscope.axis.y = gyro[1] / 131.0f;
+        gyroscope.axis.z = gyro[2] / 131.0f;
+
+        accelerometer.axis.x = accel[0] / 16384.0f;
+        accelerometer.axis.y = accel[1] / 16384.0f;
+        accelerometer.axis.z = accel[2] / 16384.0f;
+
+        FusionAhrsUpdateNoMagnetometer(&ahrs, gyroscope, accelerometer, samplePeriod);
+        FusionEuler angles = FusionQuaternionToEuler(FusionAhrsGetQuaternion(&ahrs));
+        float roll = FusionRadiansToDegrees(angles.angle.roll);
 
         btn_t evt;
-        if (ax < -TILT_THRESHOLD_G && !left_sent) {
+        // Se cruzou o limiar para a esquerda e ainda não está ativo:
+        if (roll < -15.0f && !left_active) {
             evt.button = CODE_TILT_LEFT;
             evt.value  = 1;
             xQueueSend(xQueue, &evt, 0);
-            left_sent = true;
+            left_active = true;
         }
-        if (ax > -TILT_RESET_THRESHOLD_G) left_sent = false;
-
-        if (ax > TILT_THRESHOLD_G && !right_sent) {
+        // Se cruzou o limiar para a direita e ainda não está ativo:
+        else if (roll > 15.0f && !right_active) {
             evt.button = CODE_TILT_RIGHT;
             evt.value  = 1;
             xQueueSend(xQueue, &evt, 0);
-            right_sent = true;
+            right_active = true;
         }
-        if (ax < TILT_RESET_THRESHOLD_G) right_sent = false;
+        // Se saiu de qualquer tilt (voltou ao centro):
+        else if ((left_active || right_active) && roll >= -15.0f && roll <= 15.0f) {
+            if (left_active) {
+                evt.button = CODE_TILT_LEFT;
+                evt.value  = 0;
+                xQueueSend(xQueue, &evt, 0);
+                left_active = false;
+            }
+            if (right_active) {
+                evt.button = CODE_TILT_RIGHT;
+                evt.value  = 0;
+                xQueueSend(xQueue, &evt, 0);
+                right_active = false;
+            }
+        }
 
         vTaskDelay(pdMS_TO_TICKS(10));
     }
@@ -216,10 +227,8 @@ int main(void) {
     adc_init();
     adc_gpio_init(VRX);
     adc_gpio_init(VRY);
-
     oled1_btn_led_init();
 
-    // configura IRQ dos botões
     gpio_set_irq_enabled_with_callback(START_BTN, GPIO_IRQ_EDGE_FALL|GPIO_IRQ_EDGE_RISE, true, &btn_callback);
     gpio_set_irq_enabled(BTN_HOME, GPIO_IRQ_EDGE_FALL|GPIO_IRQ_EDGE_RISE, true);
     gpio_set_irq_enabled(BTN_A,    GPIO_IRQ_EDGE_FALL|GPIO_IRQ_EDGE_RISE, true);
@@ -228,10 +237,10 @@ int main(void) {
     gpio_set_irq_enabled(BTN_2,    GPIO_IRQ_EDGE_FALL|GPIO_IRQ_EDGE_RISE, true);
 
     xQueue = xQueueCreate(32, sizeof(btn_t));
-    xTaskCreate(uart_task,       "uart", 2048, NULL, 1, NULL);
-    xTaskCreate(x_task,          "adcX", 2048, NULL, 1, NULL);
-    xTaskCreate(y_task,          "adcY", 2048, NULL, 1, NULL);
-    xTaskCreate(mpu6050_task,    "gyro", 2048, NULL, 1, NULL);
+    xTaskCreate(uart_task,    "uart", 2048, NULL, 1, NULL);
+    xTaskCreate(x_task,       "adcX", 2048, NULL, 1, NULL);
+    xTaskCreate(y_task,       "adcY", 2048, NULL, 1, NULL);
+    xTaskCreate(mpu6050_task, "gyro", 2048, NULL, 1, NULL);
 
     vTaskStartScheduler();
     while (1) tight_loop_contents();

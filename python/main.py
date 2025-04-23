@@ -1,74 +1,86 @@
 import sys
 import glob
 import serial
+import time
 import pyautogui
+import keyboard
 import tkinter as tk
 from tkinter import ttk, messagebox
-from time import sleep
 
 pyautogui.PAUSE = 0
 
 def move_mouse(button, value):
-    """Move o mouse de acordo com o eixo e valor recebidos."""
     if button == 0:
         pyautogui.moveRel(value, 0)
     elif button == 1:
         pyautogui.moveRel(0, value)
 
-
 def handle_button(button, value):
+    # Mapear botões físicos para teclas
+    key_map = {
+        3: 'a',
+        4: 'b',
+        5: 'z',
+        6: 'x'
+    }
+    if button not in key_map:
+        return
+
+    key = key_map[button]
     if value == 1:
-        if button == 3:      # BTN_A
-            pyautogui.keyDown('A')
-        elif button == 4:    # BTN_B
-            pyautogui.keyDown('B')
-        elif button == 5:    # BTN_1
-            pyautogui.keyDown('Z')
-        elif button == 6:    # BTN_2
-            pyautogui.keyDown('X')
-    elif value == 0:
-        if button == 3:
-            pyautogui.keyUp('A')
-        elif button == 4:
-            pyautogui.keyUp('B')
-        elif button == 5:
-            pyautogui.keyUp('Z')
-        elif button == 6:
-            pyautogui.keyUp('X')
-
-
-def parse_data(data):
-    button = data[0]
-    value = int.from_bytes(data[1:3], byteorder='little', signed=True)
-    return button, value
-
+        keyboard.press(key)
+    else:
+        keyboard.release(key)
 
 def controle(ser):
-    """
-    Loop principal que lê pacotes binários: 0xFF seguida de 3 bytes (button + value).
-    """
+    left_pressed = False
+    right_pressed = False
+
     while True:
-        sync = ser.read(size=1)
-        if not sync:
+        packet = ser.read(4)
+        # pacotes sempre têm 4 bytes e terminam em 0xFF
+        if len(packet) != 4 or packet[3] != 0xFF:
             continue
-        if sync[0] != 0xFF:
-            continue
-        data = ser.read(size=3)
-        if len(data) < 3:
-            continue
-        button, value = parse_data(data)
-        # Movimento de mouse
-        if button == 0 or button == 1:
+
+        button = packet[0]
+        value  = int.from_bytes(packet[1:3], byteorder='little', signed=True)
+
+        # DEBUG
+        if button in (8,9):
+            print(f"[DEBUG] Tilt event → button={button}, value={value}")
+
+        # Joystick X/Y
+        if button in (0, 1):
             move_mouse(button, value)
-        # Tilt para esquerda
-        elif button == 8 and value == 1:
-            pyautogui.press('left')
-        # Tilt para direita
-        elif button == 9 and value == 1:
-            pyautogui.press('right')
+
+        # Tilt esquerda (código 8)
+        elif button == 8:
+            if value == 1 and not left_pressed:
+                keyboard.press('left')
+                # garante que a outra seta esteja solta
+                if right_pressed:
+                    keyboard.release('right')
+                    right_pressed = False
+                left_pressed = True
+            elif value == 0 and left_pressed:
+                keyboard.release('left')
+                left_pressed = False
+
+        # Tilt direita (código 9)
+        elif button == 9:
+            if value == 1 and not right_pressed:
+                keyboard.press('right')
+                if left_pressed:
+                    keyboard.release('left')
+                    left_pressed = False
+                right_pressed = True
+            elif value == 0 and right_pressed:
+                keyboard.release('right')
+                right_pressed = False
+
+        # Botões digitais
         else:
             handle_button(button, value)
-
 
 def serial_ports():
     ports = []
@@ -88,7 +100,6 @@ def serial_ports():
     else:
         raise EnvironmentError('Plataforma não suportada para detecção de portas seriais.')
     return ports
-
 
 def conectar_porta(port_name, root, botao_conectar, status_label, mudar_cor_circulo):
     if not port_name:
@@ -111,7 +122,6 @@ def conectar_porta(port_name, root, botao_conectar, status_label, mudar_cor_circ
             ser.close()
         status_label.config(text="Conexão encerrada.", foreground="red")
         mudar_cor_circulo("red")
-
 
 def criar_janela():
     root = tk.Tk()
