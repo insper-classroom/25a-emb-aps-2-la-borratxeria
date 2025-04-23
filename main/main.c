@@ -188,19 +188,19 @@ void mpu6050_task(void *p) {
         float roll = FusionRadiansToDegrees(angles.angle.roll);
 
         btn_t evt;
-        if (roll < -15.0f) {
+        if (roll < -1000.0f) {
             evt.button = CODE_TILT_LEFT;
             evt.value = 1;
             xQueueSend(xQueue, &evt, 0);
             left_active = true;
             right_active = false;
-        } else if (roll > 15.0f) {
+        } else if (roll > 1000.0f) {
             evt.button = CODE_TILT_RIGHT;
             evt.value = 1;
             xQueueSend(xQueue, &evt, 0);
             right_active = true;
             left_active = false;
-        } else if (roll >= -10.0f && roll <= 10.0f) {
+        } else if (roll >= -800.0f && roll <= 800.0f) {
             if (left_active) {
                 evt.button = CODE_TILT_LEFT;
                 evt.value = 0;
