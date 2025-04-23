@@ -14,9 +14,9 @@
 #include "mpu6050.h"
 #include "Fusion.h"
 
-#define MPU_ADDRESS      0x68
-#define I2C_SDA_GPIO     4
-#define I2C_SCL_GPIO     5
+#define MPU_ADDRESS 0x68
+#define I2C_SDA_GPIO 4
+#define I2C_SCL_GPIO 5
 
 #define CODE_TILT_LEFT   8
 #define CODE_TILT_RIGHT  9
@@ -188,36 +188,32 @@ void mpu6050_task(void *p) {
         float roll = FusionRadiansToDegrees(angles.angle.roll);
 
         btn_t evt;
-        // Se cruzou o limiar para a esquerda e ainda não está ativo:
-        if (roll < -15.0f && !left_active) {
+        if (roll < -15.0f) {
             evt.button = CODE_TILT_LEFT;
-            evt.value  = 1;
+            evt.value = 1;
             xQueueSend(xQueue, &evt, 0);
             left_active = true;
-        }
-        // Se cruzou o limiar para a direita e ainda não está ativo:
-        else if (roll > 15.0f && !right_active) {
+            right_active = false;
+        } else if (roll > 15.0f) {
             evt.button = CODE_TILT_RIGHT;
-            evt.value  = 1;
+            evt.value = 1;
             xQueueSend(xQueue, &evt, 0);
             right_active = true;
-        }
-        // Se saiu de qualquer tilt (voltou ao centro):
-        else if ((left_active || right_active) && roll >= -15.0f && roll <= 15.0f) {
+            left_active = false;
+        } else if (roll >= -10.0f && roll <= 10.0f) {
             if (left_active) {
                 evt.button = CODE_TILT_LEFT;
-                evt.value  = 0;
+                evt.value = 0;
                 xQueueSend(xQueue, &evt, 0);
                 left_active = false;
             }
             if (right_active) {
                 evt.button = CODE_TILT_RIGHT;
-                evt.value  = 0;
+                evt.value = 0;
                 xQueueSend(xQueue, &evt, 0);
                 right_active = false;
             }
         }
-
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 }

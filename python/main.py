@@ -1,11 +1,10 @@
 import sys
 import glob
 import serial
-import time
 import pyautogui
-import keyboard
 import tkinter as tk
 from tkinter import ttk, messagebox
+from time import sleep
 
 pyautogui.PAUSE = 0
 
@@ -16,69 +15,67 @@ def move_mouse(button, value):
         pyautogui.moveRel(0, value)
 
 def handle_button(button, value):
-    # Mapear botões físicos para teclas
-    key_map = {
-        3: 'a',
-        4: 'b',
-        5: 'z',
-        6: 'x'
-    }
-    if button not in key_map:
-        return
-
-    key = key_map[button]
     if value == 1:
-        keyboard.press(key)
-    else:
-        keyboard.release(key)
+        if button == 3:
+            pyautogui.keyDown('A')
+        elif button == 4:
+            pyautogui.keyDown('B')
+        elif button == 5:
+            pyautogui.keyDown('Z')
+        elif button == 6:
+            pyautogui.keyDown('X')
+    elif value == 0:
+        if button == 3:
+            pyautogui.keyUp('A')
+        elif button == 4:
+            pyautogui.keyUp('B')
+        elif button == 5:
+            pyautogui.keyUp('Z')
+        elif button == 6:
+            pyautogui.keyUp('X')
+
+def parse_data(data):
+    button = data[0]
+    value = int.from_bytes(data[1:3], byteorder='little', signed=True)
+    return button, value
 
 def controle(ser):
     left_pressed = False
     right_pressed = False
 
     while True:
-        packet = ser.read(4)
-        # pacotes sempre têm 4 bytes e terminam em 0xFF
-        if len(packet) != 4 or packet[3] != 0xFF:
+        sync = ser.read(size=1)
+        if not sync or sync[0] != 0xFF:
+            continue
+        data = ser.read(size=3)
+        if len(data) < 3:
             continue
 
-        button = packet[0]
-        value  = int.from_bytes(packet[1:3], byteorder='little', signed=True)
+        button, value = parse_data(data)
 
-        # DEBUG
-        if button in (8,9):
-            print(f"[DEBUG] Tilt event → button={button}, value={value}")
-
-        # Joystick X/Y
         if button in (0, 1):
             move_mouse(button, value)
 
-        # Tilt esquerda (código 8)
-        elif button == 8:
+        elif button == 8:  # Tilt esquerda
             if value == 1 and not left_pressed:
-                keyboard.press('left')
-                # garante que a outra seta esteja solta
-                if right_pressed:
-                    keyboard.release('right')
-                    right_pressed = False
+                pyautogui.keyDown('left')
+                pyautogui.keyUp('right')
                 left_pressed = True
+                right_pressed = False
             elif value == 0 and left_pressed:
-                keyboard.release('left')
+                pyautogui.keyUp('left')
                 left_pressed = False
 
-        # Tilt direita (código 9)
-        elif button == 9:
+        elif button == 9:  # Tilt direita
             if value == 1 and not right_pressed:
-                keyboard.press('right')
-                if left_pressed:
-                    keyboard.release('left')
-                    left_pressed = False
+                pyautogui.keyDown('right')
+                pyautogui.keyUp('left')
                 right_pressed = True
+                left_pressed = False
             elif value == 0 and right_pressed:
-                keyboard.release('right')
+                pyautogui.keyUp('right')
                 right_pressed = False
 
-        # Botões digitais
         else:
             handle_button(button, value)
 
