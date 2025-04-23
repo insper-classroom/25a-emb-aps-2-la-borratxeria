@@ -15,6 +15,7 @@ endif()
 set(PICO_BOARD pico CACHE STRING "Board type")
 
 add_executable(pico_emb
+        hc06.c
         main.c
 )
 

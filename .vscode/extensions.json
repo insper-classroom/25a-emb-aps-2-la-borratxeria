@@ -3,11 +3,11 @@
         "ms-vscode.cpptools-themes",
         "ms-vscode.cpptools",
         "raspberry-pi.raspberry-pi-pico",
-        "ms-vscode.cpptools-extension-pack",
         "marus25.cortex-debug",
-        "ms-vscode.cmake-tools",
         "ms-vscode.vscode-serial-monitor",
+        "wokwi.wokwi-vscode",
         "twxs.cmake",
-        "wokwi.wokwi-vscode"
+        "ms-vscode.cpptools-extension-pack",
+        "ms-vscode.cmake-tools"
     ]
 }

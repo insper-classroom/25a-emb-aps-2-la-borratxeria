@@ -14,6 +14,8 @@
 #include "mpu6050.h"
 #include "Fusion.h"
 
+#include "hc06.h"
+
 #define MPU_ADDRESS 0x68
 #define I2C_SDA_GPIO 4
 #define I2C_SCL_GPIO 5
@@ -139,16 +141,22 @@ void y_task(void *p) {
 
 void uart_task(void *p) {
     btn_t evt;
+
+    uart_init(HC06_UART_ID, HC06_BAUD_RATE);
+    gpio_set_function(8, GPIO_FUNC_UART);
+    gpio_set_function(9, GPIO_FUNC_UART);
+    hc06_init("aps2_legal", "1234");
+    
     while (1) {
         if (xQueueReceive(xQueue, &evt, portMAX_DELAY)) {
             uint8_t b   = (uint8_t)evt.button;
             int16_t v   = (int16_t)evt.value;
             uint8_t lsb = v & 0xFF;
             uint8_t msb = (v >> 8) & 0xFF;
-            putchar_raw(b);
-            putchar_raw(lsb);
-            putchar_raw(msb);
-            putchar_raw(0xFF);
+            uart_putc(HC06_UART_ID, b);
+            uart_putc(HC06_UART_ID, lsb);
+            uart_putc(HC06_UART_ID, msb);
+            uart_putc(HC06_UART_ID, 0xFF);
         }
     }
 }
