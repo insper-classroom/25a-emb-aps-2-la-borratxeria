@@ -214,8 +214,7 @@ void mpu6050_task(void *p) {
                 right_active = false;
             }
         }
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
+        vTaskDelay(pdMS_TO_TICKS(10));   }
 }
 
 int main(void) {

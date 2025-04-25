@@ -58,22 +58,22 @@ def controle(ser):
 
         elif button == 8:  # Tilt esquerda
             if value == 1 and not left_pressed:
-                pyautogui.keyDown('left')
-                pyautogui.keyUp('right')
+                pyautogui.keyDown('right')
+                pyautogui.keyUp('left')
                 left_pressed = True
                 right_pressed = False
             elif value == 0 and left_pressed:
-                pyautogui.keyUp('left')
+                pyautogui.keyUp('right')
                 left_pressed = False
 
         elif button == 9:  # Tilt direita
             if value == 1 and not right_pressed:
-                pyautogui.keyDown('right')
-                pyautogui.keyUp('left')
+                pyautogui.keyDown('left')
+                pyautogui.keyUp('right')
                 right_pressed = True
                 left_pressed = False
             elif value == 0 and right_pressed:
-                pyautogui.keyUp('right')
+                pyautogui.keyUp('left')
                 right_pressed = False
 
         else:
