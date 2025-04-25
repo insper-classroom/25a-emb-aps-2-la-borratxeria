@@ -10,7 +10,7 @@ pyautogui.PAUSE = 0
 
 def move_mouse(button, value):
     if button == 0:
-        pyautogui.moveRel(value, 0)
+        pyautogui.moveRel(-value, 0)
     elif button == 1:
         pyautogui.moveRel(0, value)
 
@@ -58,22 +58,22 @@ def controle(ser):
 
         elif button == 8:  # Tilt esquerda
             if value == 1 and not left_pressed:
-                pyautogui.keyDown('right')
-                pyautogui.keyUp('left')
+                pyautogui.keyDown('down')
+                pyautogui.keyUp('up')
                 left_pressed = True
                 right_pressed = False
             elif value == 0 and left_pressed:
-                pyautogui.keyUp('right')
+                pyautogui.keyUp('down')
                 left_pressed = False
 
         elif button == 9:  # Tilt direita
             if value == 1 and not right_pressed:
-                pyautogui.keyDown('left')
-                pyautogui.keyUp('right')
+                pyautogui.keyDown('up')
+                pyautogui.keyUp('down')
                 right_pressed = True
                 left_pressed = False
             elif value == 0 and right_pressed:
-                pyautogui.keyUp('left')
+                pyautogui.keyUp('up')
                 right_pressed = False
 
         else:
