@@ -147,7 +147,7 @@ Cada evento enviado pelo Raspberry Pi Pico é composto por 4 bytes:
 
 ### Diagrama de Blocos
 
-> *Insira aqui um diagrama mostrando: MCU, I²C, ADC, tarefas, filas, semáforos, ISRs e UART.*
+![image](https://github.com/user-attachments/assets/2f14cd80-f52c-4f1f-9467-a19a93743546)
 
 
 ### ⚙️ Tasks (FreeRTOS)
