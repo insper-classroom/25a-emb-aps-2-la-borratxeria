@@ -200,6 +200,12 @@ Isso garante resposta imediata a mudanças de estado dos botões, desacoplando a
 
 ### Protótipo Real
 
-![Controle montado](./imgs/prototipo.jpg)
+![Imagem do WhatsApp de 2025-04-28 à(s) 13 40 34_b41db135](https://github.com/user-attachments/assets/8f13b02a-6f2b-47a4-b90f-8ebb763e8fc2)
+
+![Imagem do WhatsApp de 2025-04-28 à(s) 13 40 34_4d21e2f1](https://github.com/user-attachments/assets/c9cd2bca-ef19-43de-9400-c5d6f65f0819)
+
+![Imagem do WhatsApp de 2025-04-28 à(s) 13 40 34_b8fa6c1a](https://github.com/user-attachments/assets/87717696-8c99-41a4-a365-d07578aa7a69)
+
+
 
 ---
