@@ -197,6 +197,8 @@ Isso garante resposta imediata a mudanças de estado dos botões, desacoplando a
 
 ## 🖼️ Imagens
 
+Link Video: https://youtu.be/I5Ymu0pTPZQ
+
 
 ### Protótipo Real
 
